@@ -1,4 +1,8 @@
-use std::{collections::VecDeque, io, time::{Duration, Instant}};
+use std::{
+    collections::VecDeque,
+    io,
+    time::{Duration, Instant},
+};
 
 use crossterm::{
     event::{
@@ -516,7 +520,6 @@ impl SceneObject {
     fn clear(&self) -> io::Result<()> {
         self.graphic.clear()
     }
-
 }
 
 struct SceneMetrics {
