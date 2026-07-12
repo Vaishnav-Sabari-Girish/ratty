@@ -58,11 +58,11 @@ impl MobiusChessApp {
     fn new() -> io::Result<Self> {
         RattyGraphic::clear_all()?;
 
-        let mut scene = RattyGraphic::new(
+        let scene = RattyGraphic::new(
             RattyGraphicSettings::new(String::from("mobius_chess.obj"))
                 .id(1)
-                .normalize(false) // Crucial: Normalizing ruins the Mobius math offsets
-                .animate(false), // Ratty's own idle/easing animation fights our manual rotation
+                .normalize(false) 
+                .animate(false), 
         );
 
         let obj_data = build_mobius_scene();
@@ -221,35 +221,61 @@ impl MobiusChessApp {
     }
 }
 
-// --- Low-level mesh emitters ---
+// --- Mesh building ---
 
-fn push_quad(
-    obj: &mut String, v_idx: &mut usize, vn_idx: &mut usize,
-    p0: [f32; 3], p1: [f32; 3], p2: [f32; 3], p3: [f32; 3], r: f32, g: f32, b: f32,
-) {
-    let n = calc_normal(p0, p1, p3);
-    for p in [p0, p1, p2, p3] {
-        obj.push_str(&format!("v {:.5} {:.5} {:.5} {:.2} {:.2} {:.2}\n", p[0], p[1], p[2], r, g, b));
-    }
-    obj.push_str(&format!("vn {:.5} {:.5} {:.5}\n", n[0], n[1], n[2]));
-    obj.push_str(&format!("f {}//{} {}//{} {}//{}\n", *v_idx, *vn_idx, *v_idx + 1, *vn_idx, *v_idx + 2, *vn_idx));
-    obj.push_str(&format!("f {}//{} {}//{} {}//{}\n", *v_idx, *vn_idx, *v_idx + 2, *vn_idx, *v_idx + 3, *vn_idx));
-    *v_idx += 4;
-    *vn_idx += 1;
+/// Accumulates the growing OBJ text plus the running vertex/normal index
+/// counters. Bundling these together (instead of passing `obj`, `v_idx`, and
+/// `vn_idx` as three separate params everywhere) is what keeps `push_quad`/
+/// `push_tri`/`lathe_piece` under clippy's argument-count limit.
+struct MeshBuilder {
+    obj: String,
+    v_idx: usize,
+    vn_idx: usize,
 }
 
-fn push_tri(
-    obj: &mut String, v_idx: &mut usize, vn_idx: &mut usize,
-    p0: [f32; 3], p1: [f32; 3], p2: [f32; 3], r: f32, g: f32, b: f32,
-) {
-    let n = calc_normal(p0, p1, p2);
-    for p in [p0, p1, p2] {
-        obj.push_str(&format!("v {:.5} {:.5} {:.5} {:.2} {:.2} {:.2}\n", p[0], p[1], p[2], r, g, b));
+impl MeshBuilder {
+    fn new() -> Self {
+        Self {
+            obj: String::from("# ratty-mobius-chess\n"),
+            v_idx: 1,
+            vn_idx: 1,
+        }
     }
-    obj.push_str(&format!("vn {:.5} {:.5} {:.5}\n", n[0], n[1], n[2]));
-    obj.push_str(&format!("f {}//{} {}//{} {}//{}\n", *v_idx, *vn_idx, *v_idx + 1, *vn_idx, *v_idx + 2, *vn_idx));
-    *v_idx += 3;
-    *vn_idx += 1;
+
+    fn push_quad(&mut self, pts: [[f32; 3]; 4], color: (f32, f32, f32)) {
+        let n = calc_normal(pts[0], pts[1], pts[3]);
+        for p in pts {
+            self.obj.push_str(&format!(
+                "v {:.5} {:.5} {:.5} {:.2} {:.2} {:.2}\n",
+                p[0], p[1], p[2], color.0, color.1, color.2
+            ));
+        }
+        self.obj.push_str(&format!("vn {:.5} {:.5} {:.5}\n", n[0], n[1], n[2]));
+        let (v, vn) = (self.v_idx, self.vn_idx);
+        self.obj.push_str(&format!("f {}//{} {}//{} {}//{}\n", v, vn, v + 1, vn, v + 2, vn));
+        self.obj.push_str(&format!("f {}//{} {}//{} {}//{}\n", v, vn, v + 2, vn, v + 3, vn));
+        self.v_idx += 4;
+        self.vn_idx += 1;
+    }
+
+    fn push_tri(&mut self, pts: [[f32; 3]; 3], color: (f32, f32, f32)) {
+        let n = calc_normal(pts[0], pts[1], pts[2]);
+        for p in pts {
+            self.obj.push_str(&format!(
+                "v {:.5} {:.5} {:.5} {:.2} {:.2} {:.2}\n",
+                p[0], p[1], p[2], color.0, color.1, color.2
+            ));
+        }
+        self.obj.push_str(&format!("vn {:.5} {:.5} {:.5}\n", n[0], n[1], n[2]));
+        let (v, vn) = (self.v_idx, self.vn_idx);
+        self.obj.push_str(&format!("f {}//{} {}//{} {}//{}\n", v, vn, v + 1, vn, v + 2, vn));
+        self.v_idx += 3;
+        self.vn_idx += 1;
+    }
+
+    fn into_obj(self) -> String {
+        self.obj
+    }
 }
 
 fn calc_normal(p0: [f32; 3], p1: [f32; 3], p2: [f32; 3]) -> [f32; 3] {
@@ -367,11 +393,10 @@ fn rook_profile() -> Vec<(f32, f32)> {
 }
 
 /// Revolves a (height, radius) profile around `frame.up`, emitting colored
-/// triangles directly into `obj`. Used for pawn/bishop/queen/king and as the
-/// cylindrical base of the rook.
+/// triangles directly into `builder`. Used for pawn/bishop/queen/king and as
+/// the cylindrical base of the rook.
 fn lathe_piece(
-    obj: &mut String, v_idx: &mut usize, vn_idx: &mut usize,
-    frame: &Frame, profile: &[(f32, f32)], segments: usize, color: (f32, f32, f32), cap_top: bool,
+    builder: &mut MeshBuilder, frame: &Frame, profile: &[(f32, f32)], segments: usize, color: (f32, f32, f32), cap_top: bool,
 ) {
     let (h0, r0) = profile[0];
     let bottom_center = v_add(frame.base, v_scale(frame.up, h0));
@@ -380,7 +405,7 @@ fn lathe_piece(
         let theta_b = ((s + 1) as f32 / segments as f32) * TAU;
         let a = ring_pt(frame, h0, r0, theta_a);
         let b = ring_pt(frame, h0, r0, theta_b);
-        push_tri(obj, v_idx, vn_idx, bottom_center, b, a, color.0, color.1, color.2);
+        builder.push_tri([bottom_center, b, a], color);
     }
 
     for w in profile.windows(2) {
@@ -393,8 +418,8 @@ fn lathe_piece(
             let b = ring_pt(frame, h0, r0, theta_b);
             let c = ring_pt(frame, h1, r1, theta_a);
             let d = ring_pt(frame, h1, r1, theta_b);
-            push_tri(obj, v_idx, vn_idx, a, b, d, color.0, color.1, color.2);
-            push_tri(obj, v_idx, vn_idx, a, d, c, color.0, color.1, color.2);
+            builder.push_tri([a, b, d], color);
+            builder.push_tri([a, d, c], color);
         }
     }
 
@@ -406,16 +431,16 @@ fn lathe_piece(
             let theta_b = ((s + 1) as f32 / segments as f32) * TAU;
             let a = ring_pt(frame, ht, rt, theta_a);
             let b = ring_pt(frame, ht, rt, theta_b);
-            push_tri(obj, v_idx, vn_idx, top_center, a, b, color.0, color.1, color.2);
+            builder.push_tri([top_center, a, b], color);
         }
     }
 }
 
 /// Rook: lathed cylindrical body up to a flat rim, then a ring of small
 /// battlement blocks stitched onto that rim.
-fn rook_piece(obj: &mut String, v_idx: &mut usize, vn_idx: &mut usize, frame: &Frame, segments: usize, color: (f32, f32, f32)) {
+fn rook_piece(builder: &mut MeshBuilder, frame: &Frame, segments: usize, color: (f32, f32, f32)) {
     let profile = rook_profile();
-    lathe_piece(obj, v_idx, vn_idx, frame, &profile, segments, color, false);
+    lathe_piece(builder, frame, &profile, segments, color, false);
 
     let (top_h, top_r) = *profile.last().unwrap();
     let inner_r = top_r * 0.65;
@@ -436,21 +461,21 @@ fn rook_piece(obj: &mut String, v_idx: &mut usize, vn_idx: &mut usize, frame: &F
         let inner0t = ring_pt(frame, top_h + block_h, inner_r, theta0);
         let inner1t = ring_pt(frame, top_h + block_h, inner_r, theta1);
 
-        push_quad(obj, v_idx, vn_idx, outer0, outer1, inner1, inner0, color.0, color.1, color.2); // bottom
-        push_quad(obj, v_idx, vn_idx, outer0t, inner0t, inner1t, outer1t, color.0, color.1, color.2); // top
-        push_quad(obj, v_idx, vn_idx, outer0, outer0t, outer1t, outer1, color.0, color.1, color.2); // outer wall
-        push_quad(obj, v_idx, vn_idx, inner0, inner1, inner1t, inner0t, color.0, color.1, color.2); // inner wall
-        push_quad(obj, v_idx, vn_idx, outer0, inner0, inner0t, outer0t, color.0, color.1, color.2); // side theta0
-        push_quad(obj, v_idx, vn_idx, outer1, outer1t, inner1t, inner1, color.0, color.1, color.2); // side theta1
+        builder.push_quad([outer0, outer1, inner1, inner0], color); // bottom
+        builder.push_quad([outer0t, inner0t, inner1t, outer1t], color); // top
+        builder.push_quad([outer0, outer0t, outer1t, outer1], color); // outer wall
+        builder.push_quad([inner0, inner1, inner1t, inner0t], color); // inner wall
+        builder.push_quad([outer0, inner0, inner0t, outer0t], color); // side theta0
+        builder.push_quad([outer1, outer1t, inner1t, inner1], color); // side theta1
     }
 }
 
 /// Knight: a small lathed base plus a handful of hand-placed boxes that lean
 /// forward (along the local `t1` tangent) to suggest a horse's neck/head/ear.
 /// Not radially symmetric, so a lathe alone can't make one.
-fn knight_piece(obj: &mut String, v_idx: &mut usize, vn_idx: &mut usize, frame: &Frame, segments: usize, color: (f32, f32, f32)) {
+fn knight_piece(builder: &mut MeshBuilder, frame: &Frame, segments: usize, color: (f32, f32, f32)) {
     let base_profile = vec![(0.000, 0.018), (0.004, 0.018), (0.010, 0.013), (0.018, 0.010), (0.026, 0.009)];
-    lathe_piece(obj, v_idx, vn_idx, frame, &base_profile, segments, color, true);
+    lathe_piece(builder, frame, &base_profile, segments, color, true);
 
     let mk = |t1v: f32, upv: f32, t2v: f32| -> [f32; 3] {
         v_add(frame.base, v_add(v_scale(frame.up, upv), v_add(v_scale(frame.t1, t1v), v_scale(frame.t2, t2v))))
@@ -478,35 +503,30 @@ fn knight_piece(obj: &mut String, v_idx: &mut usize, vn_idx: &mut usize, frame: 
             [c[3], c[7], c[4], c[0]],
         ];
         for q in quads {
-            push_quad(obj, v_idx, vn_idx, q[0], q[1], q[2], q[3], color.0, color.1, color.2);
+            builder.push_quad(q, color);
         }
     }
 }
 
-fn place_piece(
-    obj: &mut String, v_idx: &mut usize, vn_idx: &mut usize,
-    name: &str, col: usize, row: usize, is_white: bool,
-) {
+fn place_piece(builder: &mut MeshBuilder, name: &str, col: usize, row: usize, is_white: bool) {
     let uc = (col as f32 + 0.5) / BOARD_COLS as f32 - 0.5;
     let vc = (row as f32 + 0.5) / BOARD_ROWS as f32 - 0.5;
     let frame = local_frame(uc, vc);
     let color = if is_white { (0.95, 0.94, 0.90) } else { (0.08, 0.08, 0.10) };
 
     match name {
-        "pawn" => lathe_piece(obj, v_idx, vn_idx, &frame, &pawn_profile(), 10, color, true),
-        "bishop" => lathe_piece(obj, v_idx, vn_idx, &frame, &bishop_profile(), 12, color, true),
-        "queen" => lathe_piece(obj, v_idx, vn_idx, &frame, &queen_profile(), 14, color, true),
-        "king" => lathe_piece(obj, v_idx, vn_idx, &frame, &king_profile(), 14, color, true),
-        "rook" => rook_piece(obj, v_idx, vn_idx, &frame, 10, color),
-        "knight" => knight_piece(obj, v_idx, vn_idx, &frame, 8, color),
+        "pawn" => lathe_piece(builder, &frame, &pawn_profile(), 10, color, true),
+        "bishop" => lathe_piece(builder, &frame, &bishop_profile(), 12, color, true),
+        "queen" => lathe_piece(builder, &frame, &queen_profile(), 14, color, true),
+        "king" => lathe_piece(builder, &frame, &king_profile(), 14, color, true),
+        "rook" => rook_piece(builder, &frame, 10, color),
+        "knight" => knight_piece(builder, &frame, 8, color),
         _ => {}
     }
 }
 
 fn build_mobius_scene() -> String {
-    let mut obj = String::from("# ratty-mobius-chess\n");
-    let mut v_idx = 1usize;
-    let mut vn_idx = 1usize;
+    let mut builder = MeshBuilder::new();
 
     // --- Board: exactly BOARD_COLS x BOARD_ROWS = 64 chess squares, each
     // built from CURVE_SUBDIV sub-quads along the loop just to keep the
@@ -528,24 +548,24 @@ fn build_mobius_scene() -> String {
 
             let square_col = x / CURVE_SUBDIV;
             let square_row = y;
-            let is_white_square = (square_col + square_row) % 2 == 0;
-            let (br, bg, bb) = if is_white_square { (0.90, 0.88, 0.80) } else { (0.14, 0.16, 0.20) };
+            let is_white_square = (square_col + square_row).is_multiple_of(2);
+            let color = if is_white_square { (0.90, 0.88, 0.80) } else { (0.14, 0.16, 0.20) };
 
-            push_quad(&mut obj, &mut v_idx, &mut vn_idx, p0, p1, p2, p3, br, bg, bb);
+            builder.push_quad([p0, p1, p2, p3], color);
         }
     }
 
     // --- Pieces: a standard start position compressed onto 4 of the 8 rows
     // (back rank / pawns / pawns / back rank), across all 8 columns.
     let back_rank = ["rook", "knight", "bishop", "queen", "king", "bishop", "knight", "rook"];
-    for col in 0..BOARD_COLS {
-        place_piece(&mut obj, &mut v_idx, &mut vn_idx, back_rank[col], col, 0, true);
-        place_piece(&mut obj, &mut v_idx, &mut vn_idx, "pawn", col, 1, true);
-        place_piece(&mut obj, &mut v_idx, &mut vn_idx, "pawn", col, BOARD_ROWS - 2, false);
-        place_piece(&mut obj, &mut v_idx, &mut vn_idx, back_rank[col], col, BOARD_ROWS - 1, false);
+    for (col, piece_name) in back_rank.into_iter().enumerate() {
+        place_piece(&mut builder, piece_name, col, 0, true);
+        place_piece(&mut builder, "pawn", col, 1, true);
+        place_piece(&mut builder, "pawn", col, BOARD_ROWS - 2, false);
+        place_piece(&mut builder, piece_name, col, BOARD_ROWS - 1, false);
     }
 
-    obj
+    builder.into_obj()
 }
 
 // --- App Math & Plumbing ---
@@ -594,7 +614,7 @@ impl Mat3 {
         let (sin, cos) = angle.sin_cos();
         Self { m: [[cos, 0.0, sin], [0.0, 1.0, 0.0], [-sin, 0.0, cos]] }
     }
-    fn to_euler_degrees(self) -> [f32; 3] {
+    fn to_euler_degrees(&self) -> [f32; 3] {
         let cy = (self.m[0][0] * self.m[0][0] + self.m[0][1] * self.m[0][1]).sqrt();
         let (x, y, z) = if cy > 16.0 * f32::EPSILON {
             (-self.m[1][2].atan2(self.m[2][2]), self.m[0][2].atan2(cy), -self.m[0][1].atan2(self.m[0][0]))
