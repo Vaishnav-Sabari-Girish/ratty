@@ -2,9 +2,7 @@ use std::f32::consts::TAU;
 use std::io;
 use std::time::{Duration, Instant};
 
-use crossterm::event::{
-    self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEvent,
-};
+use crossterm::event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEvent};
 use crossterm::execute;
 use ratatui::{
     DefaultTerminal, Frame as TuiFrame,
@@ -61,8 +59,8 @@ impl MobiusChessApp {
         let scene = RattyGraphic::new(
             RattyGraphicSettings::new(String::from("mobius_chess.obj"))
                 .id(1)
-                .normalize(false) 
-                .animate(false), 
+                .normalize(false)
+                .animate(false),
         );
 
         let obj_data = build_mobius_scene();
@@ -141,7 +139,11 @@ impl MobiusChessApp {
     fn status(&self) -> String {
         format!(
             "64 squares | 32 pieces | spin: {} | zoom: {:.2}",
-            if self.view.auto_rotate { "on" } else { "paused" },
+            if self.view.auto_rotate {
+                "on"
+            } else {
+                "paused"
+            },
             self.view.zoom,
         )
     }
@@ -204,7 +206,9 @@ impl MobiusChessApp {
         match key.code {
             KeyCode::Char('q') | KeyCode::Esc => self.should_quit = true,
             KeyCode::Char(' ') => self.view.auto_rotate = !self.view.auto_rotate,
-            KeyCode::Char('+') | KeyCode::Char('=') => self.view.zoom = (self.view.zoom + 0.08).min(3.0),
+            KeyCode::Char('+') | KeyCode::Char('=') => {
+                self.view.zoom = (self.view.zoom + 0.08).min(3.0)
+            }
             KeyCode::Char('-') => self.view.zoom = (self.view.zoom - 0.08).max(0.2),
             KeyCode::Left => self.view.yaw -= 0.12,
             KeyCode::Right => self.view.yaw += 0.12,
@@ -250,10 +254,27 @@ impl MeshBuilder {
                 p[0], p[1], p[2], color.0, color.1, color.2
             ));
         }
-        self.obj.push_str(&format!("vn {:.5} {:.5} {:.5}\n", n[0], n[1], n[2]));
+        self.obj
+            .push_str(&format!("vn {:.5} {:.5} {:.5}\n", n[0], n[1], n[2]));
         let (v, vn) = (self.v_idx, self.vn_idx);
-        self.obj.push_str(&format!("f {}//{} {}//{} {}//{}\n", v, vn, v + 1, vn, v + 2, vn));
-        self.obj.push_str(&format!("f {}//{} {}//{} {}//{}\n", v, vn, v + 2, vn, v + 3, vn));
+        self.obj.push_str(&format!(
+            "f {}//{} {}//{} {}//{}\n",
+            v,
+            vn,
+            v + 1,
+            vn,
+            v + 2,
+            vn
+        ));
+        self.obj.push_str(&format!(
+            "f {}//{} {}//{} {}//{}\n",
+            v,
+            vn,
+            v + 2,
+            vn,
+            v + 3,
+            vn
+        ));
         self.v_idx += 4;
         self.vn_idx += 1;
     }
@@ -266,9 +287,18 @@ impl MeshBuilder {
                 p[0], p[1], p[2], color.0, color.1, color.2
             ));
         }
-        self.obj.push_str(&format!("vn {:.5} {:.5} {:.5}\n", n[0], n[1], n[2]));
+        self.obj
+            .push_str(&format!("vn {:.5} {:.5} {:.5}\n", n[0], n[1], n[2]));
         let (v, vn) = (self.v_idx, self.vn_idx);
-        self.obj.push_str(&format!("f {}//{} {}//{} {}//{}\n", v, vn, v + 1, vn, v + 2, vn));
+        self.obj.push_str(&format!(
+            "f {}//{} {}//{} {}//{}\n",
+            v,
+            vn,
+            v + 1,
+            vn,
+            v + 2,
+            vn
+        ));
         self.v_idx += 3;
         self.vn_idx += 1;
     }
@@ -279,13 +309,21 @@ impl MeshBuilder {
 }
 
 fn calc_normal(p0: [f32; 3], p1: [f32; 3], p2: [f32; 3]) -> [f32; 3] {
-    let dx1 = p1[0] - p0[0]; let dy1 = p1[1] - p0[1]; let dz1 = p1[2] - p0[2];
-    let dx2 = p2[0] - p0[0]; let dy2 = p2[1] - p0[1]; let dz2 = p2[2] - p0[2];
+    let dx1 = p1[0] - p0[0];
+    let dy1 = p1[1] - p0[1];
+    let dz1 = p1[2] - p0[2];
+    let dx2 = p2[0] - p0[0];
+    let dy2 = p2[1] - p0[1];
+    let dz2 = p2[2] - p0[2];
     let nx = dy1 * dz2 - dz1 * dy2;
     let ny = dz1 * dx2 - dx1 * dz2;
     let nz = dx1 * dy2 - dy1 * dx2;
     let len = (nx * nx + ny * ny + nz * nz).sqrt();
-    if len > 0.0 { [nx / len, ny / len, nz / len] } else { [0.0, 0.0, 1.0] }
+    if len > 0.0 {
+        [nx / len, ny / len, nz / len]
+    } else {
+        [0.0, 0.0, 1.0]
+    }
 }
 
 // --- Möbius surface math ---
@@ -312,7 +350,9 @@ fn mobius_surface_point(local_x: f32, local_y: f32, depth: f32) -> [f32; 3] {
     let width = local_y * 0.42;
     let base = mobius_raw(angle, width);
 
-    if depth == 0.0 { return base; }
+    if depth == 0.0 {
+        return base;
+    }
 
     let n = mobius_normal(angle, width);
     [
@@ -324,16 +364,32 @@ fn mobius_surface_point(local_x: f32, local_y: f32, depth: f32) -> [f32; 3] {
 
 // --- Vector helpers for building oriented piece geometry ---
 
-fn v_add(a: [f32; 3], b: [f32; 3]) -> [f32; 3] { [a[0] + b[0], a[1] + b[1], a[2] + b[2]] }
-fn v_sub(a: [f32; 3], b: [f32; 3]) -> [f32; 3] { [a[0] - b[0], a[1] - b[1], a[2] - b[2]] }
-fn v_scale(a: [f32; 3], s: f32) -> [f32; 3] { [a[0] * s, a[1] * s, a[2] * s] }
-fn v_dot(a: [f32; 3], b: [f32; 3]) -> f32 { a[0] * b[0] + a[1] * b[1] + a[2] * b[2] }
+fn v_add(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
+    [a[0] + b[0], a[1] + b[1], a[2] + b[2]]
+}
+fn v_sub(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
+    [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
+}
+fn v_scale(a: [f32; 3], s: f32) -> [f32; 3] {
+    [a[0] * s, a[1] * s, a[2] * s]
+}
+fn v_dot(a: [f32; 3], b: [f32; 3]) -> f32 {
+    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+}
 fn v_cross(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
-    [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
+    [
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+    ]
 }
 fn v_normalize(a: [f32; 3]) -> [f32; 3] {
     let len = (a[0] * a[0] + a[1] * a[1] + a[2] * a[2]).sqrt();
-    if len > 1e-6 { [a[0] / len, a[1] / len, a[2] / len] } else { [0.0, 0.0, 1.0] }
+    if len > 1e-6 {
+        [a[0] / len, a[1] / len, a[2] / len]
+    } else {
+        [0.0, 0.0, 1.0]
+    }
 }
 
 /// A local orthonormal frame anchored on the Möbius surface at (u, v):
@@ -359,7 +415,12 @@ fn local_frame(u: f32, v: f32) -> Frame {
     let t1 = v_normalize(v_sub(raw_t1, v_scale(n, v_dot(raw_t1, n))));
     let t2 = v_normalize(v_cross(n, t1));
 
-    Frame { base, up: n, t1, t2 }
+    Frame {
+        base,
+        up: n,
+        t1,
+        t2,
+    }
 }
 
 fn ring_pt(frame: &Frame, height: f32, radius: f32, theta: f32) -> [f32; 3] {
@@ -367,7 +428,10 @@ fn ring_pt(frame: &Frame, height: f32, radius: f32, theta: f32) -> [f32; 3] {
         frame.base,
         v_add(
             v_scale(frame.up, height),
-            v_add(v_scale(frame.t1, radius * theta.cos()), v_scale(frame.t2, radius * theta.sin())),
+            v_add(
+                v_scale(frame.t1, radius * theta.cos()),
+                v_scale(frame.t2, radius * theta.sin()),
+            ),
         ),
     )
 }
@@ -376,27 +440,76 @@ fn ring_pt(frame: &Frame, height: f32, radius: f32, theta: f32) -> [f32; 3] {
 // inside one board square (row spacing is ~0.05 world units wide) ---
 
 fn pawn_profile() -> Vec<(f32, f32)> {
-    vec![(0.000, 0.018), (0.004, 0.018), (0.010, 0.012), (0.020, 0.009), (0.026, 0.007), (0.032, 0.009), (0.040, 0.006), (0.050, 0.0)]
+    vec![
+        (0.000, 0.018),
+        (0.004, 0.018),
+        (0.010, 0.012),
+        (0.020, 0.009),
+        (0.026, 0.007),
+        (0.032, 0.009),
+        (0.040, 0.006),
+        (0.050, 0.0),
+    ]
 }
 fn bishop_profile() -> Vec<(f32, f32)> {
-    vec![(0.000, 0.019), (0.004, 0.019), (0.010, 0.013), (0.020, 0.009), (0.030, 0.007), (0.042, 0.009), (0.052, 0.006), (0.062, 0.0)]
+    vec![
+        (0.000, 0.019),
+        (0.004, 0.019),
+        (0.010, 0.013),
+        (0.020, 0.009),
+        (0.030, 0.007),
+        (0.042, 0.009),
+        (0.052, 0.006),
+        (0.062, 0.0),
+    ]
 }
 fn queen_profile() -> Vec<(f32, f32)> {
-    vec![(0.000, 0.020), (0.004, 0.020), (0.010, 0.014), (0.022, 0.009), (0.034, 0.008), (0.048, 0.010), (0.060, 0.011), (0.068, 0.0)]
+    vec![
+        (0.000, 0.020),
+        (0.004, 0.020),
+        (0.010, 0.014),
+        (0.022, 0.009),
+        (0.034, 0.008),
+        (0.048, 0.010),
+        (0.060, 0.011),
+        (0.068, 0.0),
+    ]
 }
 fn king_profile() -> Vec<(f32, f32)> {
-    vec![(0.000, 0.020), (0.004, 0.020), (0.010, 0.014), (0.022, 0.009), (0.036, 0.008), (0.050, 0.010), (0.064, 0.011), (0.072, 0.005), (0.078, 0.0)]
+    vec![
+        (0.000, 0.020),
+        (0.004, 0.020),
+        (0.010, 0.014),
+        (0.022, 0.009),
+        (0.036, 0.008),
+        (0.050, 0.010),
+        (0.064, 0.011),
+        (0.072, 0.005),
+        (0.078, 0.0),
+    ]
 }
 fn rook_profile() -> Vec<(f32, f32)> {
     // Ends on a flat rim (no closing to radius 0) - crenellations sit on top of it.
-    vec![(0.000, 0.019), (0.004, 0.019), (0.010, 0.013), (0.020, 0.010), (0.030, 0.011), (0.038, 0.013)]
+    vec![
+        (0.000, 0.019),
+        (0.004, 0.019),
+        (0.010, 0.013),
+        (0.020, 0.010),
+        (0.030, 0.011),
+        (0.038, 0.013),
+    ]
 }
 
 /// Revolves a (height, radius) profile around `frame.up`, emitting colored
 /// triangles directly into `builder`. Used for pawn/bishop/queen/king and as
 /// the cylindrical base of the rook.
 fn lathe_piece(
-    builder: &mut MeshBuilder, frame: &Frame, profile: &[(f32, f32)], segments: usize, color: (f32, f32, f32), cap_top: bool,
+    builder: &mut MeshBuilder,
+    frame: &Frame,
+    profile: &[(f32, f32)],
+    segments: usize,
+    color: (f32, f32, f32),
+    cap_top: bool,
 ) {
     let (h0, r0) = profile[0];
     let bottom_center = v_add(frame.base, v_scale(frame.up, h0));
@@ -474,25 +587,43 @@ fn rook_piece(builder: &mut MeshBuilder, frame: &Frame, segments: usize, color: 
 /// forward (along the local `t1` tangent) to suggest a horse's neck/head/ear.
 /// Not radially symmetric, so a lathe alone can't make one.
 fn knight_piece(builder: &mut MeshBuilder, frame: &Frame, segments: usize, color: (f32, f32, f32)) {
-    let base_profile = vec![(0.000, 0.018), (0.004, 0.018), (0.010, 0.013), (0.018, 0.010), (0.026, 0.009)];
+    let base_profile = vec![
+        (0.000, 0.018),
+        (0.004, 0.018),
+        (0.010, 0.013),
+        (0.018, 0.010),
+        (0.026, 0.009),
+    ];
     lathe_piece(builder, frame, &base_profile, segments, color, true);
 
     let mk = |t1v: f32, upv: f32, t2v: f32| -> [f32; 3] {
-        v_add(frame.base, v_add(v_scale(frame.up, upv), v_add(v_scale(frame.t1, t1v), v_scale(frame.t2, t2v))))
+        v_add(
+            frame.base,
+            v_add(
+                v_scale(frame.up, upv),
+                v_add(v_scale(frame.t1, t1v), v_scale(frame.t2, t2v)),
+            ),
+        )
     };
 
     // (t1_min, up_min, t2_min, t1_max, up_max, t2_max)
     let boxes = [
-        (-0.006, 0.010, -0.006, 0.006, 0.020, 0.006),   // neck base
-        (-0.003, 0.018, -0.005, 0.012, 0.028, 0.005),   // neck leaning forward (+t1)
-        (0.006, 0.024, -0.005, 0.020, 0.032, 0.005),    // head / muzzle
-        (0.005, 0.030, -0.006, 0.011, 0.038, -0.001),   // ear
+        (-0.006, 0.010, -0.006, 0.006, 0.020, 0.006), // neck base
+        (-0.003, 0.018, -0.005, 0.012, 0.028, 0.005), // neck leaning forward (+t1)
+        (0.006, 0.024, -0.005, 0.020, 0.032, 0.005),  // head / muzzle
+        (0.005, 0.030, -0.006, 0.011, 0.038, -0.001), // ear
     ];
 
     for (t1min, upmin, t2min, t1max, upmax, t2max) in boxes {
         let c = [
-            mk(t1min, upmin, t2min), mk(t1max, upmin, t2min), mk(t1max, upmin, t2max), mk(t1min, upmin, t2max),
-            mk(t1min, upmax, t2min), mk(t1max, upmax, t2min), mk(t1max, upmax, t2max), mk(t1min, upmax, t2max),
+            mk(t1min, upmin, t2min),
+            mk(t1max, upmin, t2min),
+            mk(t1max, upmin, t2max),
+            mk(t1min, upmin, t2max),
+            mk(t1min, upmax, t2min),
+            mk(t1max, upmax, t2min),
+            mk(t1max, upmax, t2max),
+            mk(t1min, upmax, t2max),
         ];
         let quads = [
             [c[0], c[1], c[2], c[3]], // bottom
@@ -512,7 +643,11 @@ fn place_piece(builder: &mut MeshBuilder, name: &str, col: usize, row: usize, is
     let uc = (col as f32 + 0.5) / BOARD_COLS as f32 - 0.5;
     let vc = (row as f32 + 0.5) / BOARD_ROWS as f32 - 0.5;
     let frame = local_frame(uc, vc);
-    let color = if is_white { (0.95, 0.94, 0.90) } else { (0.08, 0.08, 0.10) };
+    let color = if is_white {
+        (0.95, 0.94, 0.90)
+    } else {
+        (0.08, 0.08, 0.10)
+    };
 
     match name {
         "pawn" => lathe_piece(builder, &frame, &pawn_profile(), 10, color, true),
@@ -549,7 +684,11 @@ fn build_mobius_scene() -> String {
             let square_col = x / CURVE_SUBDIV;
             let square_row = y;
             let is_white_square = (square_col + square_row).is_multiple_of(2);
-            let color = if is_white_square { (0.90, 0.88, 0.80) } else { (0.14, 0.16, 0.20) };
+            let color = if is_white_square {
+                (0.90, 0.88, 0.80)
+            } else {
+                (0.14, 0.16, 0.20)
+            };
 
             builder.push_quad([p0, p1, p2, p3], color);
         }
@@ -557,7 +696,9 @@ fn build_mobius_scene() -> String {
 
     // --- Pieces: a standard start position compressed onto 4 of the 8 rows
     // (back rank / pawns / pawns / back rank), across all 8 columns.
-    let back_rank = ["rook", "knight", "bishop", "queen", "king", "bishop", "knight", "rook"];
+    let back_rank = [
+        "rook", "knight", "bishop", "queen", "king", "bishop", "knight", "rook",
+    ];
     for (col, piece_name) in back_rank.into_iter().enumerate() {
         place_piece(&mut builder, piece_name, col, 0, true);
         place_piece(&mut builder, "pawn", col, 1, true);
@@ -603,23 +744,37 @@ impl SceneView {
     }
 }
 
-struct Mat3 { m: [[f32; 3]; 3] }
+struct Mat3 {
+    m: [[f32; 3]; 3],
+}
 
 impl Mat3 {
     fn rotation_x(angle: f32) -> Self {
         let (sin, cos) = angle.sin_cos();
-        Self { m: [[1.0, 0.0, 0.0], [0.0, cos, -sin], [0.0, sin, cos]] }
+        Self {
+            m: [[1.0, 0.0, 0.0], [0.0, cos, -sin], [0.0, sin, cos]],
+        }
     }
     fn rotation_y(angle: f32) -> Self {
         let (sin, cos) = angle.sin_cos();
-        Self { m: [[cos, 0.0, sin], [0.0, 1.0, 0.0], [-sin, 0.0, cos]] }
+        Self {
+            m: [[cos, 0.0, sin], [0.0, 1.0, 0.0], [-sin, 0.0, cos]],
+        }
     }
     fn to_euler_degrees(&self) -> [f32; 3] {
         let cy = (self.m[0][0] * self.m[0][0] + self.m[0][1] * self.m[0][1]).sqrt();
         let (x, y, z) = if cy > 16.0 * f32::EPSILON {
-            (-self.m[1][2].atan2(self.m[2][2]), self.m[0][2].atan2(cy), -self.m[0][1].atan2(self.m[0][0]))
+            (
+                -self.m[1][2].atan2(self.m[2][2]),
+                self.m[0][2].atan2(cy),
+                -self.m[0][1].atan2(self.m[0][0]),
+            )
         } else {
-            (self.m[1][0].atan2(self.m[1][1]), self.m[0][2].atan2(cy), 0.0)
+            (
+                self.m[1][0].atan2(self.m[1][1]),
+                self.m[0][2].atan2(cy),
+                0.0,
+            )
         };
         [x.to_degrees(), y.to_degrees(), z.to_degrees()]
     }
@@ -631,7 +786,9 @@ impl std::ops::Mul for Mat3 {
         let mut m = [[0.0; 3]; 3];
         for (row, values) in m.iter_mut().enumerate() {
             for (col, value) in values.iter_mut().enumerate() {
-                *value = self.m[row][0] * rhs.m[0][col] + self.m[row][1] * rhs.m[1][col] + self.m[row][2] * rhs.m[2][col];
+                *value = self.m[row][0] * rhs.m[0][col]
+                    + self.m[row][1] * rhs.m[1][col]
+                    + self.m[row][2] * rhs.m[2][col];
             }
         }
         Self { m }
